@@ -1,33 +1,20 @@
-const fs = require('fs');
-const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 
-const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
-const dbFile = path.join(dataDir, 'chat.json');
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const initialData = { users: [], messages: [] };
-
-function ensureDB() {
-  fs.mkdirSync(dataDir, { recursive: true });
-  if (!fs.existsSync(dbFile)) {
-    fs.writeFileSync(dbFile, JSON.stringify(initialData, null, 2));
-  }
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
 }
 
-function readDB() {
-  ensureDB();
-  return JSON.parse(fs.readFileSync(dbFile, 'utf8'));
-}
-
-function writeDB(data) {
-  ensureDB();
-  const tempFile = `${dbFile}.tmp`;
-  fs.writeFileSync(tempFile, JSON.stringify(data, null, 2));
-  fs.renameSync(tempFile, dbFile);
-}
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { persistSession: false, autoRefreshToken: false }
+});
 
 async function connectDB() {
-  ensureDB();
-  console.log(`Render file storage ready: ${dbFile}`);
+  const { error } = await supabase.from('users').select('id').limit(1);
+  if (error) throw error;
+  console.log('Supabase persistent storage connected');
 }
 
-module.exports = { connectDB, readDB, writeDB, dbFile };
+module.exports = { supabase, connectDB };
