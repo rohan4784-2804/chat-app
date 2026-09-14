@@ -1,20 +1,45 @@
-const { createClient } = require('@supabase/supabase-js');
+const fs = require('fs');
+const path = require('path');
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Render Free has an ephemeral filesystem, so this stores data locally
+// without requiring MongoDB, Supabase, or any paid storage.
+const dataDir = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+const dbFile = path.join(dataDir, 'chat.json');
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
+const emptyDB = { users: [], messages: [] };
+
+function ensureDB() {
+  fs.mkdirSync(dataDir, { recursive: true });
+  if (!fs.existsSync(dbFile)) {
+    fs.writeFileSync(dbFile, JSON.stringify(emptyDB, null, 2), 'utf8');
+  }
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: { persistSession: false, autoRefreshToken: false }
-});
+function readDB() {
+  ensureDB();
+  try {
+    const data = JSON.parse(fs.readFileSync(dbFile, 'utf8'));
+    return {
+      users: Array.isArray(data.users) ? data.users : [],
+      messages: Array.isArray(data.messages) ? data.messages : []
+    };
+  } catch {
+    const freshDB = { users: [], messages: [] };
+    fs.writeFileSync(dbFile, JSON.stringify(freshDB, null, 2), 'utf8');
+    return freshDB;
+  }
+}
+
+function writeDB(data) {
+  ensureDB();
+  const tempFile = `${dbFile}.tmp`;
+  fs.writeFileSync(tempFile, JSON.stringify(data, null, 2), 'utf8');
+  fs.renameSync(tempFile, dbFile);
+}
 
 async function connectDB() {
-  const { error } = await supabase.from('users').select('id').limit(1);
-  if (error) throw error;
-  console.log('Supabase persistent storage connected');
+  ensureDB();
+  console.log(`File storage ready: ${dbFile}`);
 }
 
-module.exports = { supabase, connectDB };
+module.exports = { connectDB, readDB, writeDB, dataDir, dbFile };
