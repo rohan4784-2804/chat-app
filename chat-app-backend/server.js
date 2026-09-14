@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
@@ -15,10 +16,20 @@ const io = new Server(server, { cors: { origin: '*', methods: ['GET', 'POST', 'P
 app.use(cors());
 app.use(express.json());
 
-app.get('/', (req, res) => res.json({ status: 'ok', message: 'Chat app backend is running' }));
+// Serve the actual DChat website.
+app.use(express.static(path.join(__dirname, 'public')));
+
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/auth', authRoutes);
 app.use('/messages', verifyJWT, messageRoutes);
+
+// Keep API/unknown browser requests from showing a JSON-only homepage.
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/auth') || req.path.startsWith('/messages') || req.path === '/health') {
+    return res.status(404).json({ error: 'Not found' });
+  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
