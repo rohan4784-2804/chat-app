@@ -23,8 +23,24 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.use('/auth', authRoutes);
 app.use('/messages', verifyJWT, messageRoutes);
 
+// Track live Socket.IO connections by user ID.
+// A user is online only while at least one of their chat tabs is connected.
+const onlineUsers = new Map();
+
+function broadcastPresence() {
+  io.emit('presence:update', Array.from(onlineUsers.keys()));
+}
+
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
+
+  socket.on('presence:join', (userId) => {
+    if (!userId || typeof userId !== 'string') return;
+    socket.data.userId = userId;
+    onlineUsers.set(userId, (onlineUsers.get(userId) || 0) + 1);
+    broadcastPresence();
+  });
+
   socket.on('chat message', (msg, ack) => {
     try {
       if (!msg || typeof msg.text !== 'string' || !msg.text.trim()) {
@@ -43,7 +59,17 @@ io.on('connection', (socket) => {
       if (typeof ack === 'function') ack({ ok: false, error: 'Failed to send message' });
     }
   });
-  socket.on('disconnect', () => console.log('User disconnected:', socket.id));
+
+  socket.on('disconnect', () => {
+    const userId = socket.data.userId;
+    if (userId) {
+      const count = (onlineUsers.get(userId) || 1) - 1;
+      if (count <= 0) onlineUsers.delete(userId);
+      else onlineUsers.set(userId, count);
+      broadcastPresence();
+    }
+    console.log('User disconnected:', socket.id);
+  });
 });
 
 const PORT = Number(process.env.PORT) || 3000;
