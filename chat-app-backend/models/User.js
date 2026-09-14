@@ -1,23 +1,25 @@
 const crypto = require('crypto');
-const { readDB, writeDB } = require('../config/db');
+const { supabase } = require('../config/db');
 
-function findById(id) {
-  const db = readDB();
-  return db.users.find((u) => u.id === id) || null;
+async function findById(id) {
+  const { data, error } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data || null;
 }
 
-function findByUsername(username) {
-  const db = readDB();
-  return db.users.find((u) => u.username === username) || null;
+async function findByUsername(username) {
+  const { data, error } = await supabase.from('users').select('*').eq('username', username).maybeSingle();
+  if (error) throw error;
+  return data || null;
 }
 
-function findByEmail(email) {
-  const db = readDB();
-  return db.users.find((u) => u.email === email.toLowerCase()) || null;
+async function findByEmail(email) {
+  const { data, error } = await supabase.from('users').select('*').eq('email', email.toLowerCase()).maybeSingle();
+  if (error) throw error;
+  return data || null;
 }
 
-function createUser({ username, email, passwordHash }) {
-  const db = readDB();
+async function createUser({ username, email, passwordHash }) {
   const user = {
     id: crypto.randomUUID(),
     username,
@@ -25,9 +27,10 @@ function createUser({ username, email, passwordHash }) {
     passwordHash,
     createdAt: new Date().toISOString()
   };
-  db.users.push(user);
-  writeDB(db);
-  return user;
+
+  const { data, error } = await supabase.from('users').insert(user).select('*').single();
+  if (error) throw error;
+  return data;
 }
 
 module.exports = { findById, findByUsername, findByEmail, createUser };
